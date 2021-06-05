@@ -10,8 +10,10 @@ func main() {
 
 	var config Config
 
-	config.ListenPort = "10000"
-	config.CryptoURL = "https://api.hitbtc.com/api/2/public"
+	err := config.ParseEnv()
+	if err != nil {
+		log.Fatalf("error occured initializing config")
+	}
 
 	log.Printf("listening port: %s\n", config.ListenPort)
 

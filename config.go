@@ -11,7 +11,7 @@ type Config struct {
 //ParseEnv this is a function that get local env and return an error
 func (conf *Config) ParseEnv() error {
 
-	InitStringEnv("CryptoURL", &conf.CryptoURL, "https://api.hitbtc.com/api/2/public/ticker", true)
+	InitStringEnv("CryptoURL", &conf.CryptoURL, "https://api.hitbtc.com/api/2/public", false)
 	InitStringEnv("ListenPort", &conf.ListenPort, "10000", false)
 
 	return nil

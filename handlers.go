@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -14,122 +13,76 @@ func (conf *Config) GetCurrencyPriceInfo(w http.ResponseWriter, r *http.Request)
 	vars := mux.Vars(r)
 	symbol := vars[SYMBOL]
 
-	if symbol == "all" {
-		resp, err := conf.GetAllCurrencies(w, r)
+	if symbol != "all" {
+		currencyURL := conf.CryptoURL + "/currency/" + symbol
+		resp1, err := call("GET", currencyURL, nil)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "error occured in getting currency information")
+			writeError(w, http.StatusInternalServerError, "error occured in getting currency info")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.WriteHeader(http.StatusOK)
+		defer resp1.Body.Close()
 
-		json.NewEncoder(w).Encode(resp)
-		return
+		if resp1.StatusCode != http.StatusOK {
+			writeError(w, http.StatusBadRequest, "not a valid currency")
+			return
+		}
 	}
 
-	var currencyRes Response
-
-	currencyURL := conf.CryptoURL + "/currency/" + symbol
-	resp1, err := call("GET", currencyURL, nil)
+	arg := "all"
+	if symbol != "all" {
+		arg = symbol
+	}
+	resp, err := conf.GetAllCurrencies(w, r, arg)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "error occured in getting currency info")
-		return
-	}
-	if resp1.StatusCode != http.StatusOK {
-		writeError(w, http.StatusBadRequest, "not a valid currency")
-		return
-	}
-
-	curContents, err := ioutil.ReadAll(resp1.Body)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "error reading response from currency details")
-		return
-	}
-	if err := json.Unmarshal(curContents, &currencyRes); err != nil {
-		fmt.Println("error occured unmarshalling the response", err.Error())
-		return
-	}
-
-	symbolX := "BTCUSD"
-	symbolY := "USD"
-
-	if symbol == "ETH" {
-		symbolX = "ETHBTC"
-		symbolY = "BTC"
-	}
-
-	response := []Response{
-		{
-			ID:          currencyRes.ID,
-			FullName:    currencyRes.FullName,
-			FeeCurrency: symbolY,
-		},
-	}
-
-	currencyPricesURL := conf.CryptoURL + "/ticker"
-	q := make(map[string]string)
-	q["symbols"] = symbolX
-
-	resp, err1 := call("GET", currencyPricesURL, q)
-	if err1 != nil {
-		writeError(w, http.StatusInternalServerError, "error getting currency prices info")
-		return
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		writeError(w, http.StatusInternalServerError, "error in getting response")
-		return
-	}
-	defer resp.Body.Close()
-
-	contents, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "error reading response from currency price details")
-		return
-	}
-
-	if err := json.Unmarshal(contents, &response); err != nil {
-		fmt.Println("error occured:", err.Error())
+		writeError(w, http.StatusInternalServerError, "error occured in getting currency information")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.WriteHeader(resp.StatusCode)
+	w.WriteHeader(http.StatusOK)
 
-	json.NewEncoder(w).Encode(response)
-
+	if symbol == "all" {
+		json.NewEncoder(w).Encode(resp)
+	} else {
+		json.NewEncoder(w).Encode(resp[0])
+	}
 }
 
-//GetAllCurrencies - to get currenct details
-func (conf *Config) GetAllCurrencies(w http.ResponseWriter, r *http.Request) ([]Response, error) {
+//GetAllCurrencies - to get currency details
+func (conf *Config) GetAllCurrencies(w http.ResponseWriter, r *http.Request, symbol string) ([]Response, error) {
 	var response []Response
 
 	currencyPricesURL := conf.CryptoURL + "/ticker"
+
 	q := make(map[string]string)
-	q["symbols"] = ALL
+	if symbol == "all" {
+		q["symbols"] = ALL
+	} else {
+		symbolX := "BTCUSD"
+
+		if symbol == "ETH" {
+			symbolX = "ETHBTC"
+		}
+		q["symbols"] = symbolX
+	}
 
 	resp, err1 := call("GET", currencyPricesURL, q)
 	if err1 != nil {
-		writeError(w, http.StatusInternalServerError, "error calling currency prices url")
 		return response, err1
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		writeError(w, http.StatusInternalServerError, "error in getting response")
 		return response, err1
 	}
 	defer resp.Body.Close()
 
 	contents, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "error reading response")
 		return response, err
 	}
 
 	if err := json.Unmarshal(contents, &response); err != nil {
-		writeError(w, http.StatusInternalServerError, "error unmarshalling response data")
 		return response, err
 	}
 
@@ -150,18 +103,15 @@ func (conf *Config) GetAllCurrencies(w http.ResponseWriter, r *http.Request) ([]
 		currencyURL := conf.CryptoURL + "/currency/" + symbolX
 		resp1, err := call("GET", currencyURL, nil)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "not valid currency")
 			return response, err
 		}
 
 		curContents, err := ioutil.ReadAll(resp1.Body)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "error reading response")
 			return response, err
 		}
 
 		if err := json.Unmarshal(curContents, &currencyRes); err != nil {
-			fmt.Println("error occured:", err.Error())
 			return response, err
 		}
 
@@ -197,9 +147,7 @@ func call(method string, url string, values map[string]string) (*http.Response, 
 
 	// do an http get
 	resp, err := client.Do(req)
-
 	if err != nil {
-		//logger.Errorf("[config] Error requesting OSS scan status request: %s\n", err.Error())
 		return nil, err
 	}
 	return resp, nil
