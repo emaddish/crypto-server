@@ -78,6 +78,13 @@ I have used go mod to maintain dependencies.
 ```sh
 $ go build
 $ ./crypto-server
+
+use below GET http call's using any Rest client:
+
+http://localhost:10000/currency/all
+http://localhost:10000/currency/BTC
+http://localhost:10000/currency/ETH
+
 ```
 
 ## License
